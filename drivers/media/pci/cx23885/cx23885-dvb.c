@@ -1629,12 +1629,14 @@ static int dvb_register(struct cx23885_tsport *port)
 			fe0->dvb.frontend->ops.set_voltage =
 				dvbsky_t9580_set_voltage;
 
+			port->i2c_client_demod = NULL;
 			port->i2c_client_tuner = client_tuner;
 
 			break;
 		/* port c - terrestrial/cable */
 		case 2:
 			/* attach frontend */
+			memset(&si2168_config, 0, sizeof(si2168_config));
 			si2168_config.i2c_adapter = &adapter;
 			si2168_config.fe = &fe0->dvb.frontend;
 			si2168_config.ts_mode = SI2168_TS_SERIAL;
@@ -1654,6 +1656,7 @@ static int dvb_register(struct cx23885_tsport *port)
 			port->i2c_client_demod = client_demod;
 
 			/* attach tuner */
+			memset(&si2157_config, 0, sizeof(si2157_config));
 			si2157_config.fe = fe0->dvb.frontend;
 			memset(&info, 0, sizeof(struct i2c_board_info));
 			strlcpy(info.type, "si2157", I2C_NAME_SIZE);
