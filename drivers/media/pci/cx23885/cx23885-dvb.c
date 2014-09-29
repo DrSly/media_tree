@@ -587,7 +587,7 @@ static int p8000_set_voltage(struct dvb_frontend *fe, fe_sec_voltage_t voltage)
 	return 0;
 }
 
-static int dvbsky_t9580_set_voltage(struct dvb_frontend *fe,
+static int dvbsky_set_voltage(struct dvb_frontend *fe,
 					fe_sec_voltage_t voltage)
 {
 	struct cx23885_tsport *port = fe->dvb->priv;
@@ -607,6 +607,35 @@ static int dvbsky_t9580_set_voltage(struct dvb_frontend *fe,
 	case SEC_VOLTAGE_OFF:
 		cx23885_gpio_clear(dev, GPIO_1);
 		cx23885_gpio_clear(dev, GPIO_0);
+		break;
+	}
+
+	/* call the frontend set_voltage function */
+	port->fe_set_voltage(fe, voltage);
+
+	return 0;
+}
+
+static int dvbsky_set_voltage2(struct dvb_frontend *fe,
+					fe_sec_voltage_t voltage)
+{
+	struct cx23885_tsport *port = fe->dvb->priv;
+	struct cx23885_dev *dev = port->dev;
+
+	cx23885_gpio_enable(dev, GPIO_12 | GPIO_13, 1);
+
+	switch (voltage) {
+	case SEC_VOLTAGE_13:
+		cx23885_gpio_set(dev, GPIO_13);
+		cx23885_gpio_clear(dev, GPIO_12);
+		break;
+	case SEC_VOLTAGE_18:
+		cx23885_gpio_set(dev, GPIO_13);
+		cx23885_gpio_set(dev, GPIO_12);
+		break;
+	case SEC_VOLTAGE_OFF:
+		cx23885_gpio_clear(dev, GPIO_13);
+		cx23885_gpio_clear(dev, GPIO_12);
 		break;
 	}
 
@@ -780,12 +809,25 @@ static const struct si2165_config hauppauge_hvr4400_si2165_config = {
 	.ref_freq_Hz	= 16000000,
 };
 
-static const struct m88ds3103_config dvbsky_t9580_m88ds3103_config = {
+static const struct m88ds3103_config dvbsky_m88ds3103_config = {
 	.i2c_addr = 0x68,
 	.clock = 27000000,
 	.i2c_wr_max = 33,
 	.clock_out = 0,
 	.ts_mode = M88DS3103_TS_PARALLEL,
+	.ts_clk = 16000,
+	.ts_clk_pol = 1,
+	.lnb_en_pol = 1,
+	.lnb_hv_pol = 0,
+	.agc = 0x99,
+};
+
+static const struct m88ds3103_config dvbsky2_m88ds3103_config = {
+	.i2c_addr = 0x68,
+	.clock = 27000000,
+	.i2c_wr_max = 33,
+	.clock_out = 0,
+	.ts_mode = M88DS3103_TS_SERIAL,
 	.ts_clk = 16000,
 	.ts_clk_pol = 1,
 	.lnb_en_pol = 1,
@@ -1594,7 +1636,7 @@ static int dvb_register(struct cx23885_tsport *port)
 		case 1:
 			/* attach frontend */
 			fe0->dvb.frontend = dvb_attach(m88ds3103_attach,
-					&dvbsky_t9580_m88ds3103_config,
+					&dvbsky_m88ds3103_config,
 					&i2c_bus2->i2c_adap, &adapter);
 			if (fe0->dvb.frontend == NULL)
 				break;
@@ -1628,7 +1670,7 @@ static int dvb_register(struct cx23885_tsport *port)
 			port->fe_set_voltage =
 				fe0->dvb.frontend->ops.set_voltage;
 			fe0->dvb.frontend->ops.set_voltage =
-				dvbsky_t9580_set_voltage;
+				dvbsky_set_voltage;
 
 			port->i2c_client_demod = NULL;
 			port->i2c_client_tuner = client_tuner;
@@ -1678,6 +1720,98 @@ static int dvb_register(struct cx23885_tsport *port)
 				goto frontend_detach;
 			}
 			port->i2c_client_tuner = client_tuner;
+			break;
+		}
+		break;
+	case CX23885_BOARD_DVBSKY_S952:
+		i2c_bus = &dev->i2c_bus[0];
+		i2c_bus2 = &dev->i2c_bus[1];
+		switch (port->nr) {
+		case 1:
+			/* attach frontend */
+			fe0->dvb.frontend = dvb_attach(m88ds3103_attach,
+					&dvbsky_m88ds3103_config,
+					&i2c_bus2->i2c_adap, &adapter);
+			if (fe0->dvb.frontend == NULL)
+				break;
+
+			/* attach tuner */
+			memset(&m88ts2022_config, 0, sizeof(m88ts2022_config));
+			m88ts2022_config.fe = fe0->dvb.frontend;
+			m88ts2022_config.clock = 27000000;
+			memset(&info, 0, sizeof(struct i2c_board_info));
+			strlcpy(info.type, "m88ts2022", I2C_NAME_SIZE);
+			info.addr = 0x60;
+			info.platform_data = &m88ts2022_config;
+			request_module(info.type);
+			client_tuner = i2c_new_device(adapter, &info);
+			if (client_tuner == NULL ||
+					client_tuner->dev.driver == NULL)
+				goto frontend_detach;
+			if (!try_module_get(client_tuner->dev.driver->owner)) {
+				i2c_unregister_device(client_tuner);
+				goto frontend_detach;
+			}
+
+			/* delegate signal strength measurement to tuner */
+			fe0->dvb.frontend->ops.read_signal_strength =
+				fe0->dvb.frontend->ops.tuner_ops.get_rf_strength;
+
+			/*
+			 * for setting the voltage we need to set GPIOs on
+			 * the card.
+			 */
+			port->fe_set_voltage =
+				fe0->dvb.frontend->ops.set_voltage;
+			fe0->dvb.frontend->ops.set_voltage =
+				dvbsky_set_voltage;
+
+			port->i2c_client_demod = NULL;
+			port->i2c_client_tuner = client_tuner;
+
+			break;
+		case 2:
+			/* attach frontend */
+			fe0->dvb.frontend = dvb_attach(m88ds3103_attach,
+					&dvbsky2_m88ds3103_config,
+					&i2c_bus2->i2c_adap, &adapter);
+			if (fe0->dvb.frontend == NULL)
+				break;
+
+			/* attach tuner */
+			memset(&m88ts2022_config, 0, sizeof(m88ts2022_config));
+			m88ts2022_config.fe = fe0->dvb.frontend;
+			m88ts2022_config.clock = 27000000;
+			memset(&info, 0, sizeof(struct i2c_board_info));
+			strlcpy(info.type, "m88ts2022", I2C_NAME_SIZE);
+			info.addr = 0x60;
+			info.platform_data = &m88ts2022_config;
+			request_module(info.type);
+			client_tuner = i2c_new_device(adapter, &info);
+			if (client_tuner == NULL ||
+					client_tuner->dev.driver == NULL)
+				goto frontend_detach;
+			if (!try_module_get(client_tuner->dev.driver->owner)) {
+				i2c_unregister_device(client_tuner);
+				goto frontend_detach;
+			}
+
+			/* delegate signal strength measurement to tuner */
+			fe0->dvb.frontend->ops.read_signal_strength =
+				fe0->dvb.frontend->ops.tuner_ops.get_rf_strength;
+
+			/*
+			 * for setting the voltage we need to set GPIOs on
+			 * the card.
+			 */
+			port->fe_set_voltage =
+				fe0->dvb.frontend->ops.set_voltage;
+			fe0->dvb.frontend->ops.set_voltage =
+				dvbsky_set_voltage2;
+
+			port->i2c_client_demod = NULL;
+			port->i2c_client_tuner = client_tuner;
+
 			break;
 		}
 		break;
@@ -1755,7 +1889,8 @@ static int dvb_register(struct cx23885_tsport *port)
 		memcpy(port->frontends.adapter.proposed_mac, eeprom + 0xa0, 6);
 		break;
 		}
-	case CX23885_BOARD_DVBSKY_T9580: {
+	case CX23885_BOARD_DVBSKY_T9580:
+	case CX23885_BOARD_DVBSKY_S952: {
 		u8 eeprom[256]; /* 24C02 i2c eeprom */
 
 		if (port->nr > 2)
@@ -1765,7 +1900,7 @@ static int dvb_register(struct cx23885_tsport *port)
 		dev->i2c_bus[0].i2c_client.addr = 0xa0 >> 1;
 		tveeprom_read(&dev->i2c_bus[0].i2c_client, eeprom,
 				sizeof(eeprom));
-		printk(KERN_INFO "DVBSky T9580 port %d MAC address: %pM\n",
+		printk(KERN_INFO "DVBSky card port %d MAC address: %pM\n",
 			port->nr, eeprom + 0xc0 + (port->nr-1) * 8);
 		memcpy(port->frontends.adapter.proposed_mac, eeprom + 0xc0 +
 			(port->nr-1) * 8, 6);
