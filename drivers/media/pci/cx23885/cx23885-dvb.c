@@ -588,7 +588,7 @@ static int p8000_set_voltage(struct dvb_frontend *fe, fe_sec_voltage_t voltage)
 	return 0;
 }
 
-static int dvbsky_t9580_set_voltage(struct dvb_frontend *fe,
+static int dvbsky_set_voltage(struct dvb_frontend *fe,
 					fe_sec_voltage_t voltage)
 {
 	struct cx23885_tsport *port = fe->dvb->priv;
@@ -851,7 +851,7 @@ static const struct si2165_config hauppauge_hvr4400_si2165_config = {
 	.ref_freq_Hz	= 16000000,
 };
 
-static const struct m88ds3103_config dvbsky_t9580_m88ds3103_config = {
+static const struct m88ds3103_config dvbsky_m88ds3103_config = {
 	.i2c_addr = 0x68,
 	.clock = 27000000,
 	.i2c_wr_max = 33,
@@ -1019,7 +1019,9 @@ static int dvb_register(struct cx23885_tsport *port)
 	struct m88ts2022_config m88ts2022_config;
 	struct i2c_board_info info;
 	struct i2c_adapter *adapter;
-	struct i2c_client *client_demod, *client_tuner, *client_ci;
+	struct i2c_client *client_demod = NULL;
+	struct i2c_client *client_tuner = NULL;
+	struct i2c_client *client_ci = NULL;
 	int mfe_shared = 0; /* bus not shared by default */
 	int ret;
 
@@ -1665,7 +1667,7 @@ static int dvb_register(struct cx23885_tsport *port)
 		case 1:
 			/* attach frontend */
 			fe0->dvb.frontend = dvb_attach(m88ds3103_attach,
-					&dvbsky_t9580_m88ds3103_config,
+					&dvbsky_m88ds3103_config,
 					&i2c_bus2->i2c_adap, &adapter);
 			if (fe0->dvb.frontend == NULL)
 				break;
@@ -1699,7 +1701,7 @@ static int dvb_register(struct cx23885_tsport *port)
 			port->fe_set_voltage =
 				fe0->dvb.frontend->ops.set_voltage;
 			fe0->dvb.frontend->ops.set_voltage =
-				dvbsky_t9580_set_voltage;
+				dvbsky_set_voltage;
 
 			port->i2c_client_demod = NULL;
 			port->i2c_client_tuner = client_tuner;
@@ -1799,6 +1801,51 @@ static int dvb_register(struct cx23885_tsport *port)
 		}
 		port->i2c_client_tuner = client_tuner;
 		break;
+	case CX23885_BOARD_DVBSKY_S950C:
+		i2c_bus = &dev->i2c_bus[1];
+		i2c_bus2 = &dev->i2c_bus[0];
+
+		/* attach frontend */
+		fe0->dvb.frontend = dvb_attach(m88ds3103_attach,
+				&dvbsky_m88ds3103_config,
+				&i2c_bus->i2c_adap, &adapter);
+		if (fe0->dvb.frontend == NULL)
+			break;
+
+		/* attach tuner */
+		memset(&m88ts2022_config, 0, sizeof(m88ts2022_config));
+		m88ts2022_config.fe = fe0->dvb.frontend;
+		m88ts2022_config.clock = 27000000;
+		memset(&info, 0, sizeof(struct i2c_board_info));
+		strlcpy(info.type, "m88ts2022", I2C_NAME_SIZE);
+		info.addr = 0x60;
+		info.platform_data = &m88ts2022_config;
+		request_module(info.type);
+		client_tuner = i2c_new_device(adapter, &info);
+		if (client_tuner == NULL ||
+				client_tuner->dev.driver == NULL)
+			goto frontend_detach;
+		if (!try_module_get(client_tuner->dev.driver->owner)) {
+			i2c_unregister_device(client_tuner);
+			goto frontend_detach;
+		}
+
+		/* delegate signal strength measurement to tuner */
+		fe0->dvb.frontend->ops.read_signal_strength =
+			fe0->dvb.frontend->ops.tuner_ops.get_rf_strength;
+
+		/*
+		 * for setting the voltage we need to set GPIOs on
+		 * the card.
+		 */
+		port->fe_set_voltage =
+			fe0->dvb.frontend->ops.set_voltage;
+		fe0->dvb.frontend->ops.set_voltage =
+			dvbsky_set_voltage;
+
+		port->i2c_client_tuner = client_tuner;
+
+		break;
 	default:
 		printk(KERN_INFO "%s: The frontend of your DVB/ATSC card "
 			" isn't supported yet\n",
@@ -1889,7 +1936,8 @@ static int dvb_register(struct cx23885_tsport *port)
 			(port->nr-1) * 8, 6);
 		break;
 		}
-	case CX23885_BOARD_DVBSKY_T980C: {
+	case CX23885_BOARD_DVBSKY_T980C:
+	case CX23885_BOARD_DVBSKY_S950C: {
 		u8 eeprom[256]; /* 24C02 i2c eeprom */
 
 		/* attach CI */
@@ -1907,16 +1955,12 @@ static int dvb_register(struct cx23885_tsport *port)
 				client_ci->dev.driver == NULL) {
 			module_put(client_tuner->dev.driver->owner);
 			i2c_unregister_device(client_tuner);
-			module_put(client_demod->dev.driver->owner);
-			i2c_unregister_device(client_demod);
 			goto frontend_detach;
 		}
 		if (!try_module_get(client_ci->dev.driver->owner)) {
 			i2c_unregister_device(client_ci);
 			module_put(client_tuner->dev.driver->owner);
 			i2c_unregister_device(client_tuner);
-			module_put(client_demod->dev.driver->owner);
-			i2c_unregister_device(client_demod);
 			goto frontend_detach;
 		}
 		port->i2c_client_ci = client_ci;
@@ -1928,8 +1972,9 @@ static int dvb_register(struct cx23885_tsport *port)
 		dev->i2c_bus[0].i2c_client.addr = 0xa0 >> 1;
 		tveeprom_read(&dev->i2c_bus[0].i2c_client, eeprom,
 				sizeof(eeprom));
-		printk(KERN_INFO "DVBSky T980C MAC address: %pM\n",
-			eeprom + 0xc0);
+		printk(KERN_INFO "DVBSky %s MAC address: %pM\n",
+				(dev->board == CX23885_BOARD_DVBSKY_T980C) ?
+				"T980C" : "S950C", eeprom + 0xc0);
 		memcpy(port->frontends.adapter.proposed_mac, eeprom + 0xc0, 6);
 		break;
 		}
