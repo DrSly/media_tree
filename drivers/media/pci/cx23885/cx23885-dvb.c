@@ -1774,7 +1774,7 @@ static int dvb_register(struct cx23885_tsport *port)
 			/* attach frontend */
 			fe0->dvb.frontend = dvb_attach(m88ds3103_attach,
 					&dvbsky2_m88ds3103_config,
-					&i2c_bus2->i2c_adap, &adapter);
+					&i2c_bus->i2c_adap, &adapter);
 			if (fe0->dvb.frontend == NULL)
 				break;
 
