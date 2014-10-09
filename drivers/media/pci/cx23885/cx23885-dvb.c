@@ -1731,7 +1731,6 @@ static int dvb_register(struct cx23885_tsport *port)
 		i2c_bus = &dev->i2c_bus[0];
 		i2c_bus2 = &dev->i2c_bus[1];
 		switch (port->nr) {
-		/* port b - satellite */
 		case 1:
 			/* attach frontend */
 			memset(&si2168_config, 0, sizeof(si2168_config));
@@ -1776,7 +1775,6 @@ static int dvb_register(struct cx23885_tsport *port)
 			}
 			port->i2c_client_tuner = client_tuner;
 			break;
-		/* port c - terrestrial/cable */
 		case 2:
 			/* attach frontend */
 			memset(&si2168_config, 0, sizeof(si2168_config));
