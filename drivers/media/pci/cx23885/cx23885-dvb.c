@@ -1735,6 +1735,7 @@ static int dvb_register(struct cx23885_tsport *port)
 			/* attach frontend */
 			memset(&si2168_config, 0, sizeof(si2168_config));
 			si2168_config.i2c_adapter = &adapter;
+			si2168_config.init_tuner_first = true;
 			si2168_config.fe = &fe0->dvb.frontend;
 			si2168_config.ts_mode = SI2168_TS_PARALLEL;
 			memset(&info, 0, sizeof(struct i2c_board_info));
@@ -1780,6 +1781,7 @@ static int dvb_register(struct cx23885_tsport *port)
 			memset(&si2168_config, 0, sizeof(si2168_config));
 			si2168_config.i2c_adapter = &adapter;
 			si2168_config.fe = &fe0->dvb.frontend;
+			si2168_config.init_tuner_first = true;
 			si2168_config.ts_mode = SI2168_TS_SERIAL;
 			memset(&info, 0, sizeof(struct i2c_board_info));
 			strlcpy(info.type, "si2168", I2C_NAME_SIZE);
