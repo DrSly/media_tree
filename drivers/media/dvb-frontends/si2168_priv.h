@@ -37,6 +37,7 @@ struct si2168 {
 	fe_status_t fe_status;
 	bool active;
 	bool fw_loaded;
+	bool init_tuner_first;
 	u8 ts_mode;
 };
 

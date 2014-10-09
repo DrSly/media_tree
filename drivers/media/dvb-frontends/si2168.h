@@ -37,6 +37,9 @@ struct si2168_config {
 
 	/* TS mode */
 	u8 ts_mode;
+
+	/* Initialize tuner before demod */
+	bool init_tuner_first;
 };
 
 #define SI2168_TS_PARALLEL	0x06

@@ -363,6 +363,15 @@ static int si2168_init(struct dvb_frontend *fe)
 
 	dev_dbg(&s->client->dev, "\n");
 
+	/* initialize tuner */
+	if ((s->init_tuner_first) && (!s->fw_loaded)) {
+		if (fe->ops.tuner_ops.init) {
+			ret = fe->ops.tuner_ops.init(fe);
+			if (ret)
+				goto err;
+		}
+	}
+
 	/* initialize */
 	memcpy(cmd.args, "\xc0\x12\x00\x0c\x00\x0d\x16\x00\x00\x00\x00\x00\x00", 13);
 	cmd.wlen = 13;
@@ -670,6 +679,7 @@ static int si2168_probe(struct i2c_client *client,
 	*config->i2c_adapter = s->adapter;
 	*config->fe = &s->fe;
 	s->ts_mode = config->ts_mode;
+	s->init_tuner_first = config->init_tuner_first;
 	s->fw_loaded = false;
 
 	i2c_set_clientdata(client, s);
