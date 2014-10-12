@@ -68,6 +68,9 @@ static int dvbsky_stream_ctrl(struct dvb_usb_device *d, u8 onoff)
 	u8 obuf_pre[3] = { 0x37, 0, 0 };
 	u8 obuf_post[3] = { 0x36, 3, 0 };
 
+	dev_dbg(&d->udev->dev, "state: %s\n", (onoff == 1)
+			? "on" : "off");
+
 	mutex_lock(&state->stream_mutex);
 	ret = dvbsky_usb_generic_rw(d, obuf_pre, 3, NULL, 0);
 	if (!ret && onoff) {
@@ -90,6 +93,8 @@ static int dvbsky_gpio_ctrl(struct dvb_usb_device *d, u8 gport, u8 value)
 {
 	int ret;
 	u8 obuf[3], ibuf[2];
+
+	dev_dbg(&d->udev->dev, "gport: %d, value: %d\n", gport, value);
 
 	obuf[0] = 0x0e;
 	obuf[1] = gport;
@@ -234,6 +239,9 @@ static int dvbsky_usb_set_voltage(struct dvb_frontend *fe,
 	struct dvbsky_state *state = d_to_priv(d);
 	u8 value;
 
+	dev_dbg(&d->udev->dev, "voltage: %s\n",
+			(voltage == SEC_VOLTAGE_OFF) ? "off" : "on");
+
 	if (voltage == SEC_VOLTAGE_OFF)
 		value = 0;
 	else
@@ -262,8 +270,10 @@ static int dvbsky_read_mac_addr(struct dvb_usb_adapter *adap, u8 mac[6])
 		}
 	};
 
-	if (i2c_transfer(&d->i2c_adap, msg, 2) == 2)
+	if (i2c_transfer(&d->i2c_adap, msg, 2) == 2) {
 		memcpy(mac, ibuf, 6);
+		dev_dbg(&d->udev->dev, "MAC: %pM\n", ibuf);
+	}
 
 	return 0;
 }
@@ -273,6 +283,8 @@ static int dvbsky_usb_read_status(struct dvb_frontend *fe, fe_status_t *status)
 	struct dvb_usb_device *d = fe_to_d(fe);
 	struct dvbsky_state *state = d_to_priv(d);
 	int ret;
+
+	dev_dbg(&d->udev->dev, "\n");
 
 	ret = state->fe_read_status(fe, status);
 
@@ -309,6 +321,9 @@ static int dvbsky_s960_attach(struct dvb_usb_adapter *adap)
 	struct m88ts2022_config m88ts2022_config = {
 			.clock = 27000000,
 		};
+
+	dev_dbg(&d->udev->dev, "\n");
+
 	memset(&info, 0, sizeof(struct i2c_board_info));
 
 	/* attach demod */
@@ -362,6 +377,8 @@ fail_attach:
 
 static int dvbsky_identify_state(struct dvb_usb_device *d, const char **name)
 {
+	dev_dbg(&d->udev->dev, "\n");
+
 	dvbsky_gpio_ctrl(d, 0x04, 1);
 	msleep(20);
 	dvbsky_gpio_ctrl(d, 0x83, 0);
@@ -377,6 +394,8 @@ static int dvbsky_identify_state(struct dvb_usb_device *d, const char **name)
 static int dvbsky_init(struct dvb_usb_device *d)
 {
 	struct dvbsky_state *state = d_to_priv(d);
+
+	dev_dbg(&d->udev->dev, "\n");
 
 	/* use default interface */
 	/*
@@ -395,6 +414,8 @@ static void dvbsky_exit(struct dvb_usb_device *d)
 {
 	struct dvbsky_state *state = d_to_priv(d);
 	struct i2c_client *client;
+
+	dev_dbg(&d->udev->dev, "\n");
 
 	client = state->i2c_client_tuner;
 	/* remove I2C tuner */
