@@ -141,6 +141,7 @@
 #define EM28178_BOARD_PCTV_461E                   92
 #define EM2874_BOARD_KWORLD_UB435Q_V3		  93
 #define EM28178_BOARD_PCTV_292E                   94
+#define EM28178_BOARD_TERRATEC_T2_STICK_HD        95
 
 /* Limits minimum and default number of buffers */
 #define EM28XX_MIN_BUF 4
