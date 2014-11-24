@@ -1,5 +1,5 @@
 /*
- * Silicon Labs Si2146/2147/2157/2158 silicon tuner driver
+ * Silicon Labs Si2146/2147/2148/2157/2158 silicon tuner driver
  *
  * Copyright (C) 2014 Antti Palosaari <crope@iki.fi>
  *
@@ -42,6 +42,7 @@ struct si2157_cmd {
 	unsigned rlen;
 };
 
+#define SI2148_A20_FIRMWARE "dvb-tuner-si2148-a20-01.fw"
 #define SI2158_A20_FIRMWARE "dvb-tuner-si2158-a20-01.fw"
 
 #endif
