@@ -566,6 +566,12 @@ static int dvbsky_t680c_attach(struct dvb_usb_adapter *adap)
 	if (!try_module_get(client_tuner->dev.driver->owner))
 		goto fail_tuner_module;
 
+	/* reset ci controller */
+	dvbsky_gpio_ctrl(d, 0xc0, 1);
+	msleep(100);
+	dvbsky_gpio_ctrl(d, 0xc0, 0);
+	msleep(100);
+
 	/* attach ci controller */
 	memset(&sp2_config, 0, sizeof(sp2_config));
 	sp2_config.dvb_adap = &adap->dvb_adap;
