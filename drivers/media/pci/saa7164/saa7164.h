@@ -422,6 +422,9 @@ struct saa7164_port {
 	u8 last_v_cc;
 	u8 last_a_cc;
 	u32 done_first_interrupt;
+
+	struct i2c_client *i2c_client_demod;
+	struct i2c_client *i2c_client_tuner;
 };
 
 struct saa7164_dev {

@@ -425,6 +425,7 @@ int saa7164_dvb_unregister(struct saa7164_port *port)
 	struct saa7164_dev *dev = port->dev;
 	struct saa7164_buffer *b;
 	struct list_head *c, *n;
+	struct i2c_client *client;
 
 	dprintk(DBGLVL_DVB, "%s()\n", __func__);
 
@@ -451,6 +452,21 @@ int saa7164_dvb_unregister(struct saa7164_port *port)
 	dvb_unregister_frontend(dvb->frontend);
 	dvb_frontend_detach(dvb->frontend);
 	dvb_unregister_adapter(&dvb->adapter);
+
+	/* remove I2C client for tuner */
+	client = port->i2c_client_tuner;
+	if (client) {
+		module_put(client->dev.driver->owner);
+		i2c_unregister_device(client);
+	}
+
+	/* remove I2C client for demodulator */
+	client = port->i2c_client_demod;
+	if (client) {
+		module_put(client->dev.driver->owner);
+		i2c_unregister_device(client);
+	}
+
 	return 0;
 }
 
