@@ -24,6 +24,8 @@
 #include "tda10048.h"
 #include "tda18271.h"
 #include "s5h1411.h"
+#include "si2168.h"
+#include "si2157.h"
 
 #define DRIVER_NAME "saa7164"
 
@@ -519,6 +521,71 @@ int saa7164_dvb_register(struct saa7164_port *port)
 			break;
 		}
 		break;
+	case SAA7164_BOARD_HAUPPAUGE_HVR2205:
+	case SAA7164_BOARD_HAUPPAUGE_HVR2215:
+		{
+			struct si2168_config si2168_config;
+			struct si2157_config si2157_config;
+			struct i2c_board_info info;
+			struct i2c_adapter *adapter;
+			struct i2c_client *client_demod = NULL;
+			struct i2c_client *client_tuner = NULL;
+
+			i2c_bus = &dev->i2c_bus[port->nr + 1];
+
+			/* attach frontend */
+			memset(&si2168_config, 0, sizeof(si2168_config));
+			si2168_config.i2c_adapter = &adapter;
+			si2168_config.fe = &port->dvb.frontend;
+			si2168_config.ts_mode = SI2168_TS_SERIAL;
+			si2168_config.ts_clock_gapped = true;
+			memset(&info, 0, sizeof(struct i2c_board_info));
+			switch (port->nr) {
+			case 0:
+				info.addr = 0xc8 >> 1;
+				break;
+			case 1:
+				info.addr = 0xcc >> 1;
+				break;
+			}
+			strlcpy(info.type, "si2168", I2C_NAME_SIZE);
+			info.platform_data = &si2168_config;
+			request_module(info.type);
+			client_demod = i2c_new_device(&i2c_bus->i2c_adap,
+						      &info);
+			if (client_demod == NULL ||
+					client_demod->dev.driver == NULL)
+				break;
+			if (!try_module_get(client_demod->dev.driver->owner)) {
+				i2c_unregister_device(client_demod);
+				break;
+			}
+			port->i2c_client_demod = client_demod;
+
+			/* attach tuner */
+			memset(&si2157_config, 0, sizeof(si2157_config));
+			si2157_config.fe = port->dvb.frontend;
+			memset(&info, 0, sizeof(struct i2c_board_info));
+			strlcpy(info.type, "si2157", I2C_NAME_SIZE);
+			info.addr = 0xc0 >> 1;
+			info.platform_data = &si2157_config;
+			request_module(info.type);
+			client_tuner = i2c_new_device(adapter, &info);
+			if (client_tuner == NULL ||
+					client_tuner->dev.driver == NULL) {
+				module_put(client_demod->dev.driver->owner);
+				i2c_unregister_device(client_demod);
+				break;
+			}
+			if (!try_module_get(client_tuner->dev.driver->owner)) {
+				i2c_unregister_device(client_tuner);
+				module_put(client_demod->dev.driver->owner);
+				i2c_unregister_device(client_demod);
+				break;
+			}
+			port->i2c_client_tuner = client_tuner;
+			break;
+		}
 	case SAA7164_BOARD_HAUPPAUGE_HVR2250:
 	case SAA7164_BOARD_HAUPPAUGE_HVR2250_2:
 	case SAA7164_BOARD_HAUPPAUGE_HVR2250_3:
