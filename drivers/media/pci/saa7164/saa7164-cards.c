@@ -741,6 +741,7 @@ static void hauppauge_eeprom(struct saa7164_dev *dev, u8 *eeprom_data)
 		/* WinTV-HVR2200 (PCIe, Retail, half-height)
 		 * DVB-T (TDA18271/TDA10048) and basic analog, no IR */
 		break;
+	case 151009:
 	case 151609:
 		/* WinTV-HVR2205/HVR2215 (PCIe, Retail, full-height bracket)
 		 * DVB-T2/C (Si2157/Si2168) and basic analog, FM */
